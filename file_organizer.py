@@ -17,7 +17,8 @@ def organize(folder):
             continue
 
         ext = os.path.splitext(file)[1].lower()
-
+        matched = False.
+        
         for name, extensions in files.items():
             if ext in extensions:
                 new_folder = os.path.join(folder, name)
@@ -28,6 +29,12 @@ def organize(folder):
                 shutil.move(file_path, os.path.join(new_folder, file))
                 print(file, "->", name)
                 break
+                if not matched and ext:
+                    others_folder = os.path.join(folder, "Others")
+                  if not os.path.exists(others_folder):
+                os.mkdir(others_folder)
+            shutil.move(file_path, os.path.join(others_folder, file))
+            print(file, "-> Others")
 
 folder = input("Folder: ")
 organize(folder)
