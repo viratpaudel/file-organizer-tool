@@ -17,7 +17,7 @@ def organize(folder):
             continue
 
         ext = os.path.splitext(file)[1].lower()
-        matched = False.
+        matched = False
         
         for name, extensions in files.items():
             if ext in extensions:
@@ -28,7 +28,9 @@ def organize(folder):
 
                 shutil.move(file_path, os.path.join(new_folder, file))
                 print(file, "->", name)
+                matched = True
                 break
+                
                 if not matched and ext:
                     others_folder = os.path.join(folder, "Others")
                   if not os.path.exists(others_folder):
