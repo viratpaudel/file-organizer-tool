@@ -1,7 +1,16 @@
 import os
 import shutil
+from pathlib import Path
 
-def organize(folder):
+def organize(folder, recursive=False):
+    if not os.path.exists(folder):
+        print(f"Error: Folder '{folder}' does not exist!")
+        return
+    
+    if not os.path.isdir(folder):
+        print(f"Error: '{folder}' is not a directory!")
+        return
+    
     files = {
         "Images": [".jpg", ".jpeg", ".png", ".gif"],
         "Videos": [".mp4", ".mkv", ".avi"],
@@ -10,12 +19,20 @@ def organize(folder):
         "Archives": [".zip", ".rar", ".7z"]
     }
 
+files_moved = 0
+    files_skipped = 0
+
     for file in os.listdir(folder):
         file_path = os.path.join(folder, file)
 
-        if not os.path.isfile(file_path):
+        if  os.path.isdir(file_path):
+            if recursive:
+                print(f"\n📁 Organizing subfolder: {file}")
+                organize(file_path, recursive=True)
             continue
-
+                    if not os.path.isfile(file_path)
+                        continue
+         
         ext = os.path.splitext(file)[1].lower()
         matched = False
         
