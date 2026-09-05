@@ -43,18 +43,42 @@ files_moved = 0
                 if not os.path.exists(new_folder):
                     os.mkdir(new_folder)
 
-                shutil.move(file_path, os.path.join(new_folder, file))
-                print(file, "->", name)
-                matched = True
-                break
+                new_path = os.path.join(new_folder, file)
                 
-                if not matched and ext:
-                    others_folder = os.path.join(folder, "Others")
-                  if not os.path.exists(others_folder):
+        
+                if file_path != new_path:
+                    shutil.move(file_path, new_path)
+                    print(f"✓ {file} -> {name}/")
+                    files_moved += 1
+                    matched = True
+                    break
+        
+        
+        if not matched and ext:
+            others_folder = os.path.join(folder, "Others")
+            if not os.path.exists(others_folder):
                 os.mkdir(others_folder)
-            shutil.move(file_path, os.path.join(others_folder, file))
-            print(file, "-> Others")
+            new_path = os.path.join(others_folder, file)
+            
+            
+            if file_path != new_path:
+                shutil.move(file_path, new_path)
+                print(f"✓ {file} -> Others/")
+                files_moved += 1
+        elif not ext:
+            
+            files_skipped += 1
 
-folder = input("Folder: ")
-organize(folder)
-print("Done")
+    
+    print(f"\n{'='*50}")
+    print(f"📊 Organization Complete!")
+    print(f"Files moved: {files_moved}")
+    print(f"Files skipped: {files_skipped}")
+    print(f"{'='*50}")
+
+
+folder = input("Enter folder path: ").strip()
+recursive_input = input("Organize subfolders recursively? (y/n): ").strip().lower()
+recursive = recursive_input == 'y'
+
+organize(folder, recursive=recursive)
