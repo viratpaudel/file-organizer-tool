@@ -59,6 +59,33 @@ def _merge_categories(custom_map=None):
     return merged
 
 
+def _matches_pattern(name, patterns):
+    """Check whether a name matches any ignore pattern."""
+    if not patterns:
+        return False
+
+    for pattern in patterns:
+        if pattern and (pattern in name or name.endswith(pattern) or pattern == "*"):
+            return True
+    return False
+
+
+def _is_ignored(path, name, ignore_patterns=None, ignore_dirs=None):
+    """Return True if a file or folder should be skipped."""
+    ignore_patterns = ignore_patterns or []
+    ignore_dirs = ignore_dirs or []
+
+    if _matches_pattern(name, ignore_patterns):
+        return True
+
+    normalized_name = os.path.basename(path).lower()
+    for ignored_dir in ignore_dirs:
+        if ignored_dir and ignored_dir.lower() in normalized_name:
+            return True
+
+    return False
+
+
 def _unique_destination(path):
     """Return a non-conflicting destination path."""
     if not os.path.exists(path):
@@ -97,7 +124,25 @@ def _log_event(message, log_file=None):
             log_handle.write(message + "\n")
 
 
-def organize(folder, recursive=False, dry_run=False, max_depth=None, category_map=None, log_file=None):
+def _confirm_action(prompt_text):
+    """Prompt for confirmation before moving a file."""
+    response = input(f"{prompt_text} (y/n): ").strip().lower()
+    return response in {"y", "yes"}
+
+
+def organize(
+    folder,
+    recursive=False,
+    dry_run=False,
+    max_depth=None,
+    category_map=None,
+    log_file=None,
+    ignore_patterns=None,
+    ignore_dirs=None,
+    ask_before_move=False,
+    summary_file=None,
+    current_depth=0,
+):
     """Organize files in *folder* and optionally its subfolders.
 
     Returns a tuple containing the number of moved and skipped files.
@@ -115,29 +160,43 @@ def organize(folder, recursive=False, dry_run=False, max_depth=None, category_ma
 
     files_moved = 0
     files_skipped = 0
+    moved_files = []
+    skipped_files = []
 
     for item in sorted(os.listdir(folder)):
         item_path = os.path.join(folder, item)
 
+        if _is_ignored(item_path, item, ignore_patterns, ignore_dirs):
+            skipped_files.append(f"ignored: {item_path}")
+            continue
+
         if os.path.isdir(item_path):
             if recursive and item not in generated_folders:
-                if max_depth is not None and max_depth <= 0:
+                if max_depth is not None and current_depth >= max_depth:
                     continue
+
                 _log_event(f"\n📁 Organizing subfolder: {item}", log_file)
                 moved, skipped = organize(
                     item_path,
                     recursive=True,
                     dry_run=dry_run,
-                    max_depth=(None if max_depth is None else max_depth - 1),
+                    max_depth=max_depth,
                     category_map=category_map,
                     log_file=log_file,
+                    ignore_patterns=ignore_patterns,
+                    ignore_dirs=ignore_dirs,
+                    ask_before_move=ask_before_move,
+                    summary_file=summary_file,
+                    current_depth=current_depth + 1,
                 )
                 files_moved += moved
                 files_skipped += skipped
+                moved_files.extend([f"subfolder move: {item_path}"])
             continue
 
         if not os.path.isfile(item_path):
             files_skipped += 1
+            skipped_files.append(f"not file: {item_path}")
             continue
 
         extension = os.path.splitext(item)[1].lower()
@@ -145,6 +204,12 @@ def organize(folder, recursive=False, dry_run=False, max_depth=None, category_ma
 
         if not extension:
             files_skipped += 1
+            skipped_files.append(f"no extension: {item_path}")
+            continue
+
+        if category == "Others":
+            files_skipped += 1
+            skipped_files.append(f"unknown type: {item_path}")
             continue
 
         target_folder = os.path.join(folder, category)
@@ -153,11 +218,23 @@ def organize(folder, recursive=False, dry_run=False, max_depth=None, category_ma
 
         destination = _unique_destination(os.path.join(target_folder, item))
 
+        if ask_before_move:
+            proceed = _confirm_action(f"Move '{item}' to '{category}' folder?")
+            if not proceed:
+                skipped_files.append(f"declined: {item_path}")
+                continue
+
         if dry_run:
             _log_event(f"[DRY RUN] {item} -> {category}/", log_file)
         else:
+            if os.path.abspath(item_path) == os.path.abspath(destination):
+                _log_event(f"Skipping '{item}' because it is already in the destination folder.", log_file)
+                files_skipped += 1
+                skipped_files.append(f"already organized: {item_path}")
+                continue
             shutil.move(item_path, destination)
             _log_event(f"✓ {item} -> {category}/", log_file)
+            moved_files.append(f"{item_path} -> {destination}")
 
         files_moved += 1
 
@@ -167,17 +244,38 @@ def organize(folder, recursive=False, dry_run=False, max_depth=None, category_ma
     _log_event(f"Files skipped: {files_skipped}", log_file)
     _log_event(f"{'=' * 50}", log_file)
 
+    if summary_file:
+        summary = {
+            "folder": os.path.abspath(folder),
+            "files_moved": files_moved,
+            "files_skipped": files_skipped,
+            "moved_files": moved_files,
+            "skipped_files": skipped_files,
+        }
+        with open(summary_file, "w", encoding="utf-8") as out_file:
+            json.dump(summary, out_file, indent=2)
+
     return files_moved, files_skipped
 
 
 def _prompt_for_input():
-    """Prompt the user for a folder path and recursion preference."""
+    """Prompt the user for a folder path and optional settings."""
     folder = input("Enter folder path: ").strip()
     recursive_input = input("Organize subfolders recursively? (y/n): ").strip().lower()
     dry_run_input = input("Preview only without moving files? (y/n): ").strip().lower()
     max_depth_input = input("Max subfolder depth (leave blank for unlimited): ").strip()
     custom_map_input = input("Custom mappings (optional, format: .ext=Category; .mp4=Videos): ").strip()
-    return folder, recursive_input == "y", dry_run_input == "y", int(max_depth_input) if max_depth_input else None, custom_map_input
+    ignore_input = input("Ignore names/patterns (optional, comma-separated): ").strip()
+    ask_input = input("Ask before each move? (y/n): ").strip().lower()
+    return (
+        folder,
+        recursive_input == "y",
+        dry_run_input == "y",
+        int(max_depth_input) if max_depth_input else None,
+        custom_map_input,
+        [part.strip() for part in ignore_input.split(",") if part.strip()],
+        ask_input == "y",
+    )
 
 
 if __name__ == "__main__":
@@ -193,10 +291,22 @@ if __name__ == "__main__":
         help="Custom extension mappings in EXT=CATEGORY format, such as .svg=Images .csv=Documents",
     )
     parser.add_argument("--log-file", default=None, help="Write all actions to a log file")
+    parser.add_argument("--ignore", nargs="*", default=[], help="Ignore files/folders matching these names or patterns")
+    parser.add_argument("--ignore-dir", nargs="*", default=[], help="Do not traverse folders whose names match these values")
+    parser.add_argument("--ask-before-move", action="store_true", help="Ask for confirmation before moving each file")
+    parser.add_argument("--summary-json", default=None, help="Write a JSON summary report to the given file")
     args = parser.parse_args()
 
     if args.folder == "." and not any(os.sys.argv[1:]):
-        folder, recursive_flag, dry_run_flag, max_depth, custom_map_input = _prompt_for_input()
+        (
+            folder,
+            recursive_flag,
+            dry_run_flag,
+            max_depth,
+            custom_map_input,
+            ignore_input,
+            ask_before_move,
+        ) = _prompt_for_input()
         custom_map = _normalize_category_map([part.strip() for part in custom_map_input.split(";") if part.strip()])
     else:
         folder = args.folder
@@ -204,6 +314,8 @@ if __name__ == "__main__":
         dry_run_flag = args.dry_run
         max_depth = args.max_depth
         custom_map = _normalize_category_map(args.category_map)
+        ignore_input = args.ignore
+        ask_before_move = args.ask_before_move
 
     organize(
         folder,
@@ -212,4 +324,8 @@ if __name__ == "__main__":
         max_depth=max_depth,
         category_map=custom_map,
         log_file=args.log_file,
+        ignore_patterns=ignore_input,
+        ignore_dirs=args.ignore_dir,
+        ask_before_move=ask_before_move,
+        summary_file=args.summary_json,
     )
