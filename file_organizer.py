@@ -66,6 +66,8 @@ def _matches_pattern(name, patterns):
         return False
 
     normalized_name = name.lower()
+    candidates = {normalized_name, os.path.basename(normalized_name)}
+
     for pattern in patterns:
         if not pattern:
             continue
@@ -74,11 +76,11 @@ def _matches_pattern(name, patterns):
         if normalized_pattern == "*":
             return True
 
-        if fnmatch.fnmatchcase(normalized_name, normalized_pattern):
-            return True
-
-        if normalized_pattern in normalized_name or normalized_name.endswith(normalized_pattern):
-            return True
+        for candidate in candidates:
+            if fnmatch.fnmatchcase(candidate, normalized_pattern):
+                return True
+            if normalized_pattern in candidate or candidate.endswith(normalized_pattern):
+                return True
 
     return False
 
@@ -88,12 +90,18 @@ def _is_ignored(path, name, ignore_patterns=None, ignore_dirs=None):
     ignore_patterns = ignore_patterns or []
     ignore_dirs = ignore_dirs or []
 
-    if _matches_pattern(name, ignore_patterns):
+    if name.startswith("."):
+        return True
+
+    if _matches_pattern(path, ignore_patterns) or _matches_pattern(name, ignore_patterns):
         return True
 
     normalized_name = os.path.basename(path).lower()
     for ignored_dir in ignore_dirs:
         if ignored_dir and ignored_dir.lower() in normalized_name:
+            return True
+
+        if fnmatch.fnmatchcase(normalized_name, ignored_dir.lower()):
             return True
 
     return False
