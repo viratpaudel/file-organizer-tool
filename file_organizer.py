@@ -137,6 +137,23 @@ def _detect_category(filename, categories):
     return "Others"
 
 
+def _delete_empty_dirs(root_dir):
+    """Delete empty directories beneath *root_dir* to keep the folder tidy."""
+    if not os.path.isdir(root_dir):
+        return
+
+    for current_root, dirnames, filenames in os.walk(root_dir, topdown=False):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        if os.path.abspath(current_root) == os.path.abspath(root_dir):
+            continue
+
+        if not os.listdir(current_root):
+            try:
+                os.rmdir(current_root)
+            except OSError:
+                pass
+
+
 def _log_event(message, log_file=None):
     """Write a message to the console and optionally to a log file."""
     print(message)
@@ -163,6 +180,7 @@ def organize(
     ask_before_move=False,
     summary_file=None,
     current_depth=0,
+    delete_empty_dirs=False,
 ):
     """Organize files in *folder* and optionally its subfolders.
 
@@ -209,6 +227,7 @@ def organize(
                     ask_before_move=ask_before_move,
                     summary_file=summary_file,
                     current_depth=current_depth + 1,
+                    delete_empty_dirs=delete_empty_dirs,
                 )
                 files_moved += moved
                 files_skipped += skipped
@@ -259,6 +278,9 @@ def organize(
 
         files_moved += 1
 
+    if delete_empty_dirs and not dry_run:
+        _delete_empty_dirs(folder)
+
     _log_event(f"\n{'=' * 50}", log_file)
     _log_event("📊 Organization Complete!", log_file)
     _log_event(f"Files moved: {files_moved}", log_file)
@@ -288,6 +310,7 @@ def _prompt_for_input():
     custom_map_input = input("Custom mappings (optional, format: .ext=Category; .mp4=Videos): ").strip()
     ignore_input = input("Ignore names/patterns (optional, comma-separated): ").strip()
     ask_input = input("Ask before each move? (y/n): ").strip().lower()
+    delete_empty_input = input("Delete empty folders left behind? (y/n): ").strip().lower()
     return (
         folder,
         recursive_input == "y",
@@ -296,6 +319,7 @@ def _prompt_for_input():
         custom_map_input,
         [part.strip() for part in ignore_input.split(",") if part.strip()],
         ask_input == "y",
+        delete_empty_input == "y",
     )
 
 
@@ -316,6 +340,7 @@ if __name__ == "__main__":
     parser.add_argument("--ignore-dir", nargs="*", default=[], help="Do not traverse folders whose names match these values")
     parser.add_argument("--ask-before-move", action="store_true", help="Ask for confirmation before moving each file")
     parser.add_argument("--summary-json", default=None, help="Write a JSON summary report to the given file")
+    parser.add_argument("--delete-empty-dirs", action="store_true", help="Remove directories that become empty after organizing")
     args = parser.parse_args()
 
     if args.folder == "." and not any(os.sys.argv[1:]):
@@ -327,6 +352,7 @@ if __name__ == "__main__":
             custom_map_input,
             ignore_input,
             ask_before_move,
+            delete_empty_dirs,
         ) = _prompt_for_input()
         custom_map = _normalize_category_map([part.strip() for part in custom_map_input.split(";") if part.strip()])
     else:
@@ -337,6 +363,7 @@ if __name__ == "__main__":
         custom_map = _normalize_category_map(args.category_map)
         ignore_input = args.ignore
         ask_before_move = args.ask_before_move
+        delete_empty_dirs = args.delete_empty_dirs
 
     organize(
         folder,
@@ -349,4 +376,5 @@ if __name__ == "__main__":
         ignore_dirs=args.ignore_dir,
         ask_before_move=ask_before_move,
         summary_file=args.summary_json,
+        delete_empty_dirs=delete_empty_dirs,
     )
