@@ -1,16 +1,17 @@
 import argparse
+import fnmatch
 import json
 import os
 import shutil
 
 
 DEFAULT_FILE_CATEGORIES = {
-    "Images": {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg"},
-    "Videos": {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv"},
-    "Documents": {".pdf", ".doc", ".docx", ".txt", ".xlsx", ".xls", ".ppt", ".pptx"},
-    "Code": {".py", ".js", ".ts", ".java", ".cpp", ".c", ".cs", ".html", ".css", ".json", ".xml"},
-    "Audio": {".mp3", ".wav", ".flac", ".aac", ".ogg"},
-    "Archives": {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2"},
+    "Images": {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".heic", ".heif", ".tif", ".tiff"},
+    "Videos": {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm"},
+    "Documents": {".pdf", ".doc", ".docx", ".txt", ".xlsx", ".xls", ".ppt", ".pptx", ".md", ".rtf"},
+    "Code": {".py", ".js", ".ts", ".java", ".cpp", ".c", ".cs", ".html", ".css", ".json", ".xml", ".sql", ".yaml", ".yml"},
+    "Audio": {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"},
+    "Archives": {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".iso"},
     "Executables": {".exe", ".msi", ".dmg", ".apk"},
     "Spreadsheets": {".csv", ".ods"},
 }
@@ -64,9 +65,21 @@ def _matches_pattern(name, patterns):
     if not patterns:
         return False
 
+    normalized_name = name.lower()
     for pattern in patterns:
-        if pattern and (pattern in name or name.endswith(pattern) or pattern == "*"):
+        if not pattern:
+            continue
+
+        normalized_pattern = pattern.lower()
+        if normalized_pattern == "*":
             return True
+
+        if fnmatch.fnmatchcase(normalized_name, normalized_pattern):
+            return True
+
+        if normalized_pattern in normalized_name or normalized_name.endswith(normalized_pattern):
+            return True
+
     return False
 
 
