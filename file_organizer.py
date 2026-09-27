@@ -52,10 +52,15 @@ def _merge_categories(custom_map=None):
     if not custom_map:
         return merged
 
+    default_category_aliases = {name.lower(): name for name in merged}
+
     for ext, category in custom_map.items():
-        if category not in merged:
-            merged[category] = set()
-        merged[category].add(ext.lower())
+        normalized_category = category.strip()
+        canonical_category = default_category_aliases.get(normalized_category.lower(), normalized_category)
+
+        if canonical_category not in merged:
+            merged[canonical_category] = set()
+        merged[canonical_category].add(ext.lower())
 
     return merged
 
