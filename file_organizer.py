@@ -95,15 +95,21 @@ def _matches_ignored_dir(path, ignored_dir):
     if not ignored_dir:
         return False
 
+    ignored_dir = ignored_dir.strip().strip("/")
+    if not ignored_dir:
+        return False
+
     normalized_path = os.path.normcase(os.path.normpath(path)).lower()
     normalized_dir = os.path.normcase(os.path.normpath(ignored_dir)).lower()
     normalized_name = os.path.basename(normalized_path)
+    path_parts = {part.lower() for part in os.path.normpath(normalized_path).split(os.sep) if part}
 
     return (
         normalized_dir in normalized_path
         or fnmatch.fnmatchcase(normalized_path, normalized_dir)
         or fnmatch.fnmatchcase(normalized_name, normalized_dir)
         or normalized_dir == normalized_name
+        or any(fnmatch.fnmatchcase(part, normalized_dir) for part in path_parts)
     )
 
 
