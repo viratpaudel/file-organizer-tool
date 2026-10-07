@@ -90,6 +90,23 @@ def _matches_pattern(name, patterns):
     return False
 
 
+def _matches_ignored_dir(path, ignored_dir):
+    """Return True when a path or directory segment matches an ignore rule."""
+    if not ignored_dir:
+        return False
+
+    normalized_path = os.path.normcase(os.path.normpath(path)).lower()
+    normalized_dir = os.path.normcase(os.path.normpath(ignored_dir)).lower()
+    normalized_name = os.path.basename(normalized_path)
+
+    return (
+        normalized_dir in normalized_path
+        or fnmatch.fnmatchcase(normalized_path, normalized_dir)
+        or fnmatch.fnmatchcase(normalized_name, normalized_dir)
+        or normalized_dir == normalized_name
+    )
+
+
 def _is_ignored(path, name, ignore_patterns=None, ignore_dirs=None):
     """Return True if a file or folder should be skipped."""
     ignore_patterns = ignore_patterns or []
@@ -103,6 +120,9 @@ def _is_ignored(path, name, ignore_patterns=None, ignore_dirs=None):
 
     normalized_name = os.path.basename(path).lower()
     for ignored_dir in ignore_dirs:
+        if _matches_ignored_dir(path, ignored_dir):
+            return True
+
         if ignored_dir and ignored_dir.lower() in normalized_name:
             return True
 
